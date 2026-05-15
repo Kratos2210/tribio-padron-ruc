@@ -1,6 +1,8 @@
 /**
  * Descarga el Padrón Reducido RUC de SUNAT, lo parsea y lo emite como
- * `chunks/XXXX.json`, particionado por los primeros 4 dígitos del RUC.
+ * `chunks/XXXXX.json`, particionado por los primeros 5 dígitos del RUC.
+ * (4 dígitos generaban chunks de hasta 114 MB en prefijos densos como 2060,
+ *  por encima del límite de 100 MB de GitHub.)
  *
  * El padrón viene como ZIP (~368 MB) con un único TXT delimitado por `|`.
  * Lo procesamos en streaming para no cargar el archivo completo en memoria.
@@ -141,7 +143,7 @@ async function parseAndChunk(file: string) {
     if (!/^\d{11}$/.test(ruc)) continue;
     if (!VALID_PREFIXES.has(ruc.slice(0, 2))) continue;
 
-    const prefix = ruc.slice(0, 4);
+    const prefix = ruc.slice(0, 5);
     const ubigeo = cleanText(cols[colIdx.UBIGEO]);
     const geo = ubigeo ? ubigeoToGeo(ubigeo) : { departamento: null, provincia: null, distrito: null };
 
