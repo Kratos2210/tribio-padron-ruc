@@ -1,0 +1,13 @@
+{
+  "name": "tribio-padron-ruc",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Padrón Reducido RUC de SUNAT, particionado en chunks JSON por prefijo de 4 dígitos. Se actualiza diariamente vía GitHub Action y se sirve por jsdelivr.",
+  "scripts": {
+    "build": "node --experimental-strip-types scripts/build.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

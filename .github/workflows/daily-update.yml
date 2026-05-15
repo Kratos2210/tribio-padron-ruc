@@ -1,0 +1,37 @@
+name: Actualizar padrón SUNAT
+
+on:
+  schedule:
+    # 11:00 UTC = 06:00 Lima (UTC-5)
+    - cron: "0 11 * * *"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Generar chunks desde el padrón SUNAT
+        run: npm run build
+
+      - name: Commit si hubo cambios
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add chunks manifest.json
+          if git diff --cached --quiet; then
+            echo "Sin cambios respecto al último build."
+            exit 0
+          fi
+          UPDATED=$(jq -r .updated_at manifest.json)
+          git commit -m "chore: actualizar padrón ($UPDATED)"
+          git push
