@@ -5,10 +5,12 @@
  * El padrón viene como ZIP (~368 MB) con un único TXT delimitado por `|`.
  * Lo procesamos en streaming para no cargar el archivo completo en memoria.
  *
- * Layout del padrón reducido (columnas oficiales de SUNAT):
- *   RUC | NOMBRE | ESTADO | CONDICION_DOMICILIO | UBIGEO |
- *   TIPO_VIA | NOMBRE_VIA | CODIGO_ZONA | TIPO_ZONA | NUMERO |
- *   INTERIOR | LOTE | DEPARTAMENTO | MANZANA | KILOMETRO
+ * Layout del padrón reducido (columnas oficiales de SUNAT, con tildes y
+ * espacios — las normalizamos al leer el header):
+ *   RUC | NOMBRE O RAZÓN SOCIAL | ESTADO DEL CONTRIBUYENTE |
+ *   CONDICIÓN DE DOMICILIO | UBIGEO | TIPO DE VÍA | NOMBRE DE VÍA |
+ *   CÓDIGO DE ZONA | TIPO DE ZONA | NÚMERO | INTERIOR | LOTE |
+ *   DEPARTAMENTO | MANZANA | KILÓMETRO
  *
  * Lo más útil para la API pública es: ruc, razón social, estado,
  * condición de domicilio, ubigeo y los tres niveles geográficos
@@ -130,7 +132,7 @@ async function parseAndChunk(file: string) {
     const cols = line.split("|").map((s) => s.trim());
 
     if (!header) {
-      header = cols.map((c) => c.toUpperCase());
+      header = cols.map(normalizeHeader);
       colIdx = Object.fromEntries(header.map((c, i) => [c, i]));
       continue;
     }
@@ -140,16 +142,16 @@ async function parseAndChunk(file: string) {
     if (!VALID_PREFIXES.has(ruc.slice(0, 2))) continue;
 
     const prefix = ruc.slice(0, 4);
-    const ubigeo = cols[colIdx.UBIGEO] ?? "";
-    const geo = ubigeoToGeo(ubigeo);
+    const ubigeo = cleanText(cols[colIdx.UBIGEO]);
+    const geo = ubigeo ? ubigeoToGeo(ubigeo) : { departamento: null, provincia: null, distrito: null };
 
     const record: Row = [
       ruc,
-      cleanText(cols[colIdx.NOMBRE]),
-      cleanText(cols[colIdx.ESTADO]),
-      cleanText(cols[colIdx.CONDICION_DOMICILIO]),
+      cleanText(cols[colIdx.NOMBRE_O_RAZON_SOCIAL]),
+      cleanText(cols[colIdx.ESTADO_DEL_CONTRIBUYENTE]),
+      cleanText(cols[colIdx.CONDICION_DE_DOMICILIO]),
       tipoContribuyenteFromRuc(ruc),
-      ubigeo || null,
+      ubigeo,
       buildDireccion(cols, colIdx),
       geo.departamento,
       geo.provincia,
@@ -186,7 +188,24 @@ async function writeChunkFiles(updatedAt: string) {
 function cleanText(s: string | undefined): string | null {
   if (!s) return null;
   const t = s.replace(/\s+/g, " ").trim();
-  return t.length ? t : null;
+  // SUNAT usa "-" como placeholder de campo vacío.
+  if (!t.length || t === "-") return null;
+  return t;
+}
+
+/**
+ * Normaliza un header de SUNAT a una clave estable:
+ *   "NOMBRE O RAZÓN SOCIAL" → "NOMBRE_O_RAZON_SOCIAL"
+ *   "CÓDIGO DE ZONA"        → "CODIGO_DE_ZONA"
+ *   "KILÓMETRO"             → "KILOMETRO"
+ */
+function normalizeHeader(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // quita tildes (combining diacritics)
+    .toUpperCase()
+    .trim()
+    .replace(/\s+/g, "_");
 }
 
 function tipoContribuyenteFromRuc(ruc: string): string {
@@ -202,20 +221,29 @@ function buildDireccion(
   cols: string[],
   idx: Record<string, number>,
 ): string | null {
-  const parts = [
-    cols[idx.TIPO_VIA],
-    cols[idx.NOMBRE_VIA],
-    cols[idx.NUMERO] && `Nro. ${cols[idx.NUMERO]}`,
-    cols[idx.INTERIOR] && `Int. ${cols[idx.INTERIOR]}`,
-    cols[idx.MANZANA] && `Mz. ${cols[idx.MANZANA]}`,
-    cols[idx.LOTE] && `Lt. ${cols[idx.LOTE]}`,
-    cols[idx.KILOMETRO] && `Km. ${cols[idx.KILOMETRO]}`,
-    cols[idx.TIPO_ZONA] && cols[idx.CODIGO_ZONA]
-      ? `${cols[idx.TIPO_ZONA]} ${cols[idx.CODIGO_ZONA]}`
-      : null,
-  ].filter((p) => p && String(p).trim().length);
-  if (!parts.length) return null;
-  return parts.join(" ").replace(/\s+/g, " ").trim();
+  const get = (key: string) => cleanText(cols[idx[key]]);
+  const tipoVia = get("TIPO_DE_VIA");
+  const nombreVia = get("NOMBRE_DE_VIA");
+  const nro = get("NUMERO");
+  const interior = get("INTERIOR");
+  const mz = get("MANZANA");
+  const lt = get("LOTE");
+  const km = get("KILOMETRO");
+  const tipoZona = get("TIPO_DE_ZONA");
+  const codZona = get("CODIGO_DE_ZONA");
+
+  const parts: (string | null)[] = [
+    tipoVia,
+    nombreVia,
+    nro && `Nro. ${nro}`,
+    interior && `Int. ${interior}`,
+    mz && `Mz. ${mz}`,
+    lt && `Lt. ${lt}`,
+    km && `Km. ${km}`,
+    tipoZona && codZona ? `${tipoZona} ${codZona}` : null,
+  ];
+  const out = parts.filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+  return out.length ? out : null;
 }
 
 let ubigeoTable: Record<string, { departamento: string; provincia: string; distrito: string }> | null = null;
