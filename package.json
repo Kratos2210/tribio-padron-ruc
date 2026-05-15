@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Padrón Reducido RUC de SUNAT, particionado en chunks JSON por prefijo de 4 dígitos. Se actualiza diariamente vía GitHub Action y se sirve por jsdelivr.",
   "scripts": {
-    "build": "node --experimental-strip-types scripts/build.ts"
+    "build": "node --experimental-strip-types --max-old-space-size=6144 scripts/build.ts"
   },
   "engines": {
     "node": ">=22"
