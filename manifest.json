@@ -1,7 +1,7 @@
 {
-  "updated_at": "2026-07-19T12:11:00.550Z",
+  "updated_at": "2026-07-20T13:19:57.511Z",
   "source": "https://www.sunat.gob.pe/descargaPRR/padron_reducido_ruc.zip",
-  "total_records": 18284887,
+  "total_records": 18284900,
   "prefixes_count": 1972,
   "columns": [
     "ruc",
